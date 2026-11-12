@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #1f1f23; color: #efeff1; font: 14px system-ui, Roboto, sans-serif; }
+  .head { position: sticky; top: 0; padding: 12px; background: #1f1f23; }
+  input { width: 100%; padding: 10px 14px; border: 1px solid #3a3a42; border-radius: 20px; background: #0e0e10; color: #fff; font-size: 15px; outline: none; }
+  input:focus { border-color: #7c5cff; }
+  .grid { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 10px 20px; }
+  button { display: inline-flex; align-items: center; justify-content: center; min-width: 52px; height: 52px; padding: 4px; border: 0; border-radius: 10px; background: transparent; }
+  button:active { background: #3a3a42; }
+  img { max-height: 40px; max-width: 96px; }
+  .empty { padding: 24px; text-align: center; color: #9a98a6; }
+</style>
+</head>
+<body>
+<div class="head"><input id="q" type="search" placeholder="Buscar emote..."></div>
+<div class="grid" id="grid"></div>
+<script>
+  var all = [];
+  function draw() {
+    var q = document.getElementById("q").value.toLowerCase();
+    var grid = document.getElementById("grid");
+    grid.innerHTML = "";
+    var list = q ? all.filter(function (e) { return e.n.toLowerCase().indexOf(q) !== -1; }) : all;
+    if (!list.length) { grid.innerHTML = '<div class="empty">Nenhum emote encontrado.</div>'; return; }
+    list.slice(0, 600).forEach(function (e) {
+      var b = document.createElement("button");
+      var img = document.createElement("img");
+      img.src = e.u + "/2x.webp";
+      img.loading = "lazy";
+      img.alt = e.n;
+      b.appendChild(img);
+      b.onclick = function () { Picker.pick(e.n); };
+      grid.appendChild(b);
+    });
+  }
+  function render(list) { all = list; draw(); }
+  document.getElementById("q").addEventListener("input", draw);
+</script>
+</body>
+</html>

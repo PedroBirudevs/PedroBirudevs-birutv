@@ -1,0 +1,10 @@
+/* Ajustes do chat dentro do app: o campo de mensagem é o do próprio app. */
+yt-live-chat-message-input-renderer,
+yt-live-chat-restricted-participation-renderer,
+#input-panel,
+.stv-picker-btn,
+.stv-picker,
+.stv-tooltip {
+  display: none !important;
+}
+html, body { background: #0f0f12 !important; }
