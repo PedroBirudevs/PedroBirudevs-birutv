@@ -53,7 +53,7 @@
   cursor: pointer;
 }
 .stv-picker-btn:hover { background: rgba(127, 127, 127, .2); }
-.stv-picker-btn img { width: 22px; height: 22px; }
+.stv-picker-btn svg { width: 22px; height: 22px; display: block; }
 .stv-picker-btn.stv-floating {
   position: fixed;
   right: 10px;

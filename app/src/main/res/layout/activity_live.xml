@@ -31,7 +31,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="Essa live não deixa abrir o vídeo fora do YouTube.\nO chat com os emotes continua funcionando aqui embaixo."
+                android:text="Essa live não deixa tocar o vídeo fora do YouTube.\nO chat com os emotes continua funcionando aqui embaixo."
                 android:textColor="@color/text" />
 
             <com.google.android.material.button.MaterialButton
@@ -42,6 +42,48 @@
                 android:text="Abrir vídeo no YouTube" />
         </LinearLayout>
     </FrameLayout>
+
+    <!-- barra de informações -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="@color/surface"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingEnd="12dp">
+
+        <ImageButton
+            android:id="@+id/back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Voltar"
+            android:src="@drawable/ic_back" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/pill_live"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="2dp"
+            android:text="AO VIVO"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/live_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:text="Wallacetaa LIVES"
+            android:textColor="@color/text"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <WebView
         android:id="@+id/chat"
@@ -78,11 +120,11 @@
             android:id="@+id/emote_btn"
             android:layout_width="44dp"
             android:layout_height="44dp"
-            android:background="@android:color/transparent"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Emotes"
-            android:padding="4dp"
+            android:padding="8dp"
             android:scaleType="fitCenter"
-            android:src="@mipmap/ic_launcher" />
+            android:src="@drawable/ic_emote" />
 
         <EditText
             android:id="@+id/input"
@@ -104,9 +146,10 @@
             android:id="@+id/send_btn"
             android:layout_width="44dp"
             android:layout_height="44dp"
-            android:background="@android:color/transparent"
+            android:background="@drawable/send_bg"
             android:contentDescription="Enviar"
-            android:src="@android:drawable/ic_menu_send"
-            android:tint="@color/accent" />
+            android:padding="11dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_send" />
     </LinearLayout>
 </LinearLayout>

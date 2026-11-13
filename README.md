@@ -1,13 +1,12 @@
 # BiruTV
 
-App Android para assistir lives do YouTube com os **emotes do 7TV** no chat, no estilo do Purple TV, mas feito do zero. Não é o app do YouTube modificado: usa o player oficial e a API oficial do YouTube.
+App Android para as lives do **Wallacetaa LIVES** (@wallacetaaLIVES) com os **emotes do 7TV** no chat. Não é o app do YouTube modificado: usa o player oficial e a API oficial do YouTube.
 
+- Tela inicial mostra se o canal está **ao vivo**, **agendado** ou **offline** (confere sozinho a cada minuto; puxe para baixo para atualizar)
 - Player oficial do YouTube (tela cheia deitando o celular)
-- Chat ao vivo com emotes do 7TV (globais + do canal + set extra opcional)
-- Mandar mensagem entrando com a conta Google (tela oficial do Google)
+- Chat ao vivo com os emotes do 7TV: **Wallacetaa's Emotes** (412, do antigo canal da Twitch) + globais
+- Comentar entrando com a conta Google; a mensagem aparece na hora no chat ("Você · enviando")
 - Sugestões de emote enquanto digita e botão com todos os emotes
-- "Compartilhar → BiruTV" direto do app do YouTube
-- Aceita link da live, ID do vídeo ou `@canal` (abre a live atual do canal)
 
 > App não oficial. Sem ligação com YouTube, Google ou 7TV.
 
@@ -52,13 +51,14 @@ O Google dá **10.000 unidades por dia** de graça para o projeto inteiro. Cada 
 
 1. Baixe o `BiruTV.apk` no celular.
 2. Abra o arquivo. O Android vai pedir para permitir instalar de "fontes desconhecidas" para o navegador/gerenciador de arquivos: permita.
-3. Abra o BiruTV, cole o link da live ou o `@canal` e toque em **Assistir**.
-
-Dica: na live, no app do YouTube, toque em **Compartilhar → BiruTV**.
+3. Abra o BiruTV. Se o canal estiver ao vivo, toque em **Entrar na live**.
 
 ## Como funciona por dentro
 
+- `ChannelStatus.kt`: descobre se o canal está ao vivo lendo a página `/live` do canal só até achar a resposta (compactada com gzip).
+- `MainActivity.kt`: tela inicial do canal.
 - `LiveActivity.kt`: tela da live. Em cima, o player oficial do YouTube (IFrame API). Embaixo, o chat ao vivo do YouTube (`youtube.com/live_chat`) com o mesmo script da extensão de navegador injetado (`assets/content.js`), que troca os nomes pelos emotes.
 - `assets/shim.js`: ponte entre o script da extensão e o app. O app busca os emotes na API do 7TV e entrega para o chat.
+- `assets/echo.js`: mostra na hora a mensagem enviada, até ela chegar no chat do YouTube.
 - `YouTubeApi.kt` + `GoogleAuth.kt`: login e envio de mensagens pela YouTube Data API v3.
 - Algumas lives não deixam tocar o vídeo fora do YouTube; nesse caso aparece um botão para abrir o vídeo no app do YouTube e o chat com emotes continua funcionando.

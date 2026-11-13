@@ -1,6 +1,6 @@
 // Roda dentro do iframe do chat ao vivo do YouTube (youtube.com/live_chat).
-// 1) descobre o ID do canal, 2) pede os emotes ao background,
-// 3) troca as palavras das mensagens pelos emotes, 4) Tab autocompleta, 5) seletor de emotes.
+// Pede os emotes ao background, troca as palavras das mensagens pelos emotes,
+// Tab autocompleta e o botão abre o seletor de emotes.
 
 (() => {
   if (window.__stvLoaded) return;
@@ -9,8 +9,7 @@
   const DEFAULTS = { enabled: true, size: 28, extraSet: "", tooltips: true };
   let settings = { ...DEFAULTS };
   let emoteMap = new Map(); // nome -> emote
-  let emoteList = []; // para autocompletar / seletor (canal primeiro)
-  let channelId = null;
+  let emoteList = []; // para autocompletar / seletor (Wallacetaa primeiro)
 
   const MSG_SELECTOR = [
     "yt-live-chat-text-message-renderer #message",
@@ -18,46 +17,32 @@
     "yt-live-chat-membership-item-renderer #message",
     "yt-live-chat-item-list-renderer #items [id=message]",
   ].join(",");
+  // cria elemento sem innerHTML (o YouTube bloqueia innerHTML com Trusted Types)
+  function el(tag, props = {}, ...children) {
+    const e = Object.assign(document.createElement(tag), props);
+    e.append(...children);
+    return e;
+  }
+  // ícone desenhado em SVG (o YouTube bloqueia imagens data: e chrome-extension: no chat)
+  function iconSvg() {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "22");
+    svg.setAttribute("height", "22");
+    const parts = [
+      ["circle", { cx: 12, cy: 12, r: 10, fill: "#ffc43d" }],
+      ["path", { d: "M7.6 9.6l2.2 1.1-2.2 1.1M16.4 9.6l-2.2 1.1 2.2 1.1", stroke: "#241f33", "stroke-width": 1.4, fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }],
+      ["path", { d: "M7.8 13.6Q12 19 16.2 13.6Z", fill: "#241f33" }],
+    ];
+    for (const [tag, attrs] of parts) {
+      const node = document.createElementNS(NS, tag);
+      for (const k in attrs) node.setAttribute(k, attrs[k]);
+      svg.appendChild(node);
+    }
+    return svg;
+  }
   const INPUT_SELECTOR = "yt-live-chat-text-input-field-renderer #input";
-
-  // ---------- ID do canal ----------
-
-  function videoIdFromUrl(href) {
-    try {
-      const u = new URL(href, location.origin);
-      return u.searchParams.get("v") || (u.pathname.match(/^\/(?:live|shorts)\/([\w-]{11})/) || [])[1] || null;
-    } catch {
-      return null;
-    }
-  }
-
-  function findVideoId() {
-    let v = videoIdFromUrl(location.href);
-    if (v) return v;
-    try {
-      // o iframe do chat é do mesmo domínio da página do vídeo
-      const flexy = window.top.document.querySelector("ytd-watch-flexy[video-id]");
-      if (flexy) v = flexy.getAttribute("video-id");
-      if (!v) v = videoIdFromUrl(window.top.location.href);
-    } catch {}
-    return v || videoIdFromUrl(document.referrer);
-  }
-
-  async function resolveChannelId() {
-    const v = findVideoId();
-    if (!v) return null;
-    try {
-      const html = await (await fetch(`https://www.youtube.com/watch?v=${v}`, { credentials: "include" })).text();
-      const m =
-        html.match(/"videoDetails":\{[^}]*?"channelId":"(UC[\w-]{22})"/) ||
-        html.match(/<meta itemprop="channelId" content="(UC[\w-]{22})"/) ||
-        html.match(/"externalChannelId":"(UC[\w-]{22})"/) ||
-        html.match(/"channelId":"(UC[\w-]{22})"/);
-      return m ? m[1] : null;
-    } catch {
-      return null;
-    }
-  }
 
   // ---------- carregar emotes ----------
 
@@ -72,8 +57,7 @@
   }
 
   async function loadEmotes() {
-    const res = await sendMessage({ type: "stv:emotes", channelId, extraSet: settings.extraSet.trim() });
-    console.log("[7TV-YT] resposta da API:", res);
+    const res = await sendMessage({ type: "stv:emotes", extraSet: settings.extraSet.trim() });
     if (!res || res.error) {
       toast("7TV: não consegui carregar os emotes" + (res && res.error ? ` (${res.error})` : ""));
       return;
@@ -82,18 +66,16 @@
     const tag = (arr, scope) => arr.forEach((e) => map.set(e.n, { ...e, s: scope }));
     tag(res.global, "Global");
     tag(res.extra, "Set extra");
-    tag(res.channel, "Canal");
+    tag(res.main, "Wallacetaa");
     emoteMap = map;
-    const rank = { Canal: 0, "Set extra": 1, Global: 2 };
+    const rank = { Wallacetaa: 0, "Set extra": 1, Global: 2 };
     emoteList = [...map.values()].sort((a, b) => rank[a.s] - rank[b.s] || a.n.localeCompare(b.n));
 
-    const parts = [`${res.global.length} globais`];
-    if (res.channel.length) parts.unshift(`${res.channel.length} do canal${res.user ? " " + res.user : ""}`);
-    else parts.push("canal sem 7TV vinculado");
+    const parts = [`${res.main.length} do Wallacetaa`, `${res.global.length} globais`];
     if (res.extra.length) parts.push(`${res.extra.length} do set extra`);
-    const sample = emoteList.slice(0, 200).filter((e) => /^[A-Za-z]{2,10}$/.test(e.n)).slice(0, 4).map((e) => e.n);
+    const sample = emoteList.filter((e) => /^[A-Za-z]{2,10}$/.test(e.n)).slice(0, 4).map((e) => e.n);
     toast("7TV: " + parts.join(" · ") + (sample.length ? ` — teste: ${sample.join(", ")}` : ""), 12000);
-    console.log("[7TV-YT] canal:", channelId, "| emotes:", map.size, "| exemplos:", sample.join(", "));
+    console.log("[7TV-YT] emotes:", map.size, "| exemplos:", sample.join(", "));
 
     document.querySelectorAll(MSG_SELECTOR).forEach(queue);
   }
@@ -166,6 +148,9 @@
     }
   }
 
+  // usado pelo app (prévia da mensagem enviada)
+  window.__stvRender = (el) => processMessage(el);
+
   const pending = new Set();
   let scheduled = false;
   function queue(msgEl) {
@@ -205,7 +190,7 @@
       tip.className = "stv-tooltip";
       document.body.appendChild(tip);
     }
-    tip.innerHTML = "";
+    tip.replaceChildren();
     const img = document.createElement("img");
     img.src = `${e.u}/4x.webp`;
     const name = document.createElement("div");
@@ -322,14 +307,17 @@
 
   let picker = null;
   function buildPicker() {
-    picker = document.createElement("div");
-    picker.className = "stv-picker";
-    picker.innerHTML = `
-      <div class="stv-picker-head">
-        <input class="stv-picker-search" type="text" placeholder="Buscar emote 7TV..." />
-        <button class="stv-picker-close" title="Fechar">✕</button>
-      </div>
-      <div class="stv-picker-body"></div>`;
+    picker = el(
+      "div",
+      { className: "stv-picker" },
+      el(
+        "div",
+        { className: "stv-picker-head" },
+        el("input", { className: "stv-picker-search", type: "text", placeholder: "Buscar emote 7TV..." }),
+        el("button", { className: "stv-picker-close", title: "Fechar", textContent: "✕" })
+      ),
+      el("div", { className: "stv-picker-body" })
+    );
     document.body.appendChild(picker);
     const search = picker.querySelector(".stv-picker-search");
     search.addEventListener("input", () => renderPicker(search.value));
@@ -352,7 +340,7 @@
 
   function renderPicker(q) {
     const body = picker.querySelector(".stv-picker-body");
-    body.innerHTML = "";
+    body.replaceChildren();
     const lq = (q || "").toLowerCase();
     const groups = new Map();
     for (const e of emoteList) {
@@ -405,7 +393,7 @@
     const btn = document.createElement("button");
     btn.className = "stv-picker-btn";
     btn.title = "Emotes 7TV";
-    btn.innerHTML = `<img src="${chrome.runtime.getURL("icons/icon32.png")}" alt="7TV" />`;
+    btn.appendChild(iconSvg());
     btn.addEventListener("click", (ev) => {
       ev.preventDefault();
       togglePicker();
@@ -454,7 +442,6 @@
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     setInterval(ensureButton, 2000);
     ensureButton();
-    channelId = await resolveChannelId();
     await loadEmotes();
   }
 

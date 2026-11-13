@@ -8,3 +8,30 @@ yt-live-chat-restricted-participation-renderer,
   display: none !important;
 }
 html, body { background: #0f0f12 !important; }
+
+/* prévia da mensagem enviada */
+#biru-echo {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 10px 6px;
+  pointer-events: none;
+}
+.biru-echo-row {
+  padding: 5px 10px;
+  border-left: 3px solid #7c5cff;
+  border-radius: 8px;
+  background: rgba(40, 32, 80, 0.92);
+  color: #fff;
+  font: 13px/1.4 Roboto, Arial, sans-serif;
+  word-break: break-word;
+}
+.biru-echo-row.fail { border-color: #e53935; background: rgba(90, 20, 20, 0.92); }
+.biru-echo-who { margin-right: 6px; color: #c9b8ff; font-weight: 700; }
+.biru-echo-st { color: #a9a6b8; font-size: 11px; }
+.biru-echo-row .stv-emote img { height: 24px; }

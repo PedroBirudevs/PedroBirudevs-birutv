@@ -36,25 +36,26 @@ import java.util.concurrent.Executors
 class LiveActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_VIDEO = "video_id"
+        const val EXTRA_TITLE = "title"
         private const val ORIGIN = "https://pedrobirudevs.github.io"
     }
 
     private lateinit var videoId: String
-    private lateinit var playerBox: FrameLayout
     private lateinit var player: WebView
     private lateinit var playerError: View
     private lateinit var chat: WebView
     private lateinit var input: EditText
-    private lateinit var sendBtn: ImageButton
     private lateinit var suggest: LinearLayout
     private lateinit var suggestScroll: View
     private lateinit var auth: GoogleAuth
 
-    private val bg = Executors.newCachedThreadPool()
+    private val io = Executors.newCachedThreadPool()
+    private val sender = Executors.newSingleThreadExecutor() // mantém a ordem das mensagens
 
     @Volatile private var emotes: List<Pair<String, String>> = emptyList() // nome -> url
     @Volatile private var liveChatId: String? = null
-    private var token: String? = null
+    @Volatile private var token: String? = null
+    private var echoSeq = 0
 
     private var customView: View? = null
     private var customCallback: WebChromeClient.CustomViewCallback? = null
@@ -67,14 +68,14 @@ class LiveActivity : AppCompatActivity() {
         videoId = intent.getStringExtra(EXTRA_VIDEO) ?: run { finish(); return }
         auth = GoogleAuth(this)
 
-        playerBox = findViewById(R.id.player_box)
+        val playerBox = findViewById<FrameLayout>(R.id.player_box)
         player = findViewById(R.id.player)
         playerError = findViewById(R.id.player_error)
         chat = findViewById(R.id.chat)
         input = findViewById(R.id.input)
-        sendBtn = findViewById(R.id.send_btn)
         suggest = findViewById(R.id.suggest)
         suggestScroll = findViewById(R.id.suggest_scroll)
+        findViewById<TextView>(R.id.live_title).text = intent.getStringExtra(EXTRA_TITLE) ?: Channel.NAME
 
         // player em 16:9
         playerBox.layoutParams = playerBox.layoutParams.apply {
@@ -84,7 +85,9 @@ class LiveActivity : AppCompatActivity() {
         setupPlayer()
         setupChat()
         setupInput()
+        prefetchSendInfo()
 
+        findViewById<View>(R.id.back).setOnClickListener { finish() }
         findViewById<View>(R.id.open_youtube).setOnClickListener {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId")))
         }
@@ -107,17 +110,10 @@ class LiveActivity : AppCompatActivity() {
         player.setBackgroundColor(Color.BLACK)
         player.addJavascriptInterface(PlayerBridge(), "BiruPlayer")
         player.webChromeClient = object : WebChromeClient() {
-            override fun onShowCustomView(view: View, callback: CustomViewCallback) {
-                enterFullscreen(view, callback)
-            }
-
-            override fun onHideCustomView() {
-                exitFullscreen()
-            }
+            override fun onShowCustomView(view: View, callback: CustomViewCallback) = enterFullscreen(view, callback)
+            override fun onHideCustomView() = exitFullscreen()
         }
-        val html = assetText("player.html")
-            .replace("{{VIDEO_ID}}", videoId)
-            .replace("{{ORIGIN}}", ORIGIN)
+        val html = assetText("player.html").replace("{{VIDEO_ID}}", videoId).replace("{{ORIGIN}}", ORIGIN)
         player.loadDataWithBaseURL("$ORIGIN/", html, "text/html", "utf-8", null)
     }
 
@@ -190,12 +186,15 @@ class LiveActivity : AppCompatActivity() {
             append("\n;(function(chrome){\n")
             append(assetText("content.js"))
             append("\n})(window.__stvChrome);\n")
-            append("(function(){if(document.getElementById('biru-css'))return;var s=document.createElement('style');s.id='biru-css';s.textContent=")
+            append(assetText("echo.js"))
+            append("\n(function(){if(document.getElementById('biru-css'))return;var s=document.createElement('style');s.id='biru-css';s.textContent=")
             append(JSONObject.quote(css))
             append(";document.documentElement.appendChild(s);})();")
         }
         chat.evaluateJavascript(js, null)
     }
+
+    private fun chatJs(js: String) = chat.post { chat.evaluateJavascript(js, null) }
 
     inner class ChatBridge {
         @JavascriptInterface
@@ -205,35 +204,32 @@ class LiveActivity : AppCompatActivity() {
                 done(id, 0, "")
                 return
             }
-            bg.execute {
+            io.execute {
                 val r = try { Net.request(url, userAgent = "BiruTV") } catch (e: Exception) { Net.Resp(0, "") }
                 done(id, r.code, r.body)
             }
         }
 
-        private fun done(id: Int, code: Int, body: String) {
-            val js = "window.__stvFetchDone && window.__stvFetchDone($id,$code,${JSONObject.quote(body)})"
-            chat.post { chat.evaluateJavascript(js, null) }
-        }
+        private fun done(id: Int, code: Int, body: String) =
+            chatJs("window.__stvFetchDone && window.__stvFetchDone($id,$code,${JSONObject.quote(body)})")
 
         @JavascriptInterface
-        fun getSettings(): String = Prefs.settingsJson(this@LiveActivity)
+        fun getSettings(): String = Prefs.settingsJson()
 
         @JavascriptInterface
         fun onEmotes(json: String) {
             val arr = JSONArray(json)
-            val list = (0 until arr.length())
+            emotes = (0 until arr.length())
                 .map { arr.getJSONObject(it) }
                 .map { it.getString("n") to it.getString("u") }
                 .distinctBy { it.first }
-            emotes = list
         }
     }
 
     // ---------------- campo de mensagem ----------------
 
     private fun setupInput() {
-        sendBtn.setOnClickListener { sendCurrent() }
+        findViewById<View>(R.id.send_btn).setOnClickListener { sendCurrent() }
         input.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND) { sendCurrent(); true } else false
         }
@@ -279,10 +275,8 @@ class LiveActivity : AppCompatActivity() {
                 }
                 setOnClickListener { replaceCurrentWord(name) }
             }
-            val lp = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ).apply { marginEnd = (6 * dp).toInt() }
+            val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { marginEnd = (6 * dp).toInt() }
             suggest.addView(chip, lp)
         }
         suggestScroll.visibility = View.VISIBLE
@@ -340,65 +334,83 @@ class LiveActivity : AppCompatActivity() {
 
     // ---------------- enviar ----------------
 
+    /** Já deixa pronto o login e o ID do chat, para a primeira mensagem sair rápido. */
+    private fun prefetchSendInfo() {
+        auth.token(interactive = false) { t, _ ->
+            if (t == null) return@token
+            token = t
+            sender.execute { runCatching { liveChatId = YouTubeApi.liveChatId(videoId, t) } }
+        }
+    }
+
     private fun sendCurrent() {
         val text = input.text.toString().trim()
         if (text.isEmpty()) return
-        send(text, retried = false)
+        withToken { tok ->
+            // aparece na hora no chat e o campo já fica livre
+            input.text.clear()
+            val id = ++echoSeq
+            chatJs("window.__biruEcho && __biruEcho($id, ${JSONObject.quote(text)})")
+            sender.execute { deliver(text, id, tok, retried = false) }
+        }
     }
 
-    private fun withToken(cb: (String) -> Unit) {
-        token?.let { cb(it); return }
-        auth.token { t, err ->
-            if (t != null) {
-                token = t
-                cb(t)
-            } else {
-                toast(err ?: "Não foi possível entrar com o Google")
+    /** Roda na thread de envio. */
+    private fun deliver(text: String, id: Int, tok: String, retried: Boolean) {
+        try {
+            val chatId = liveChatId ?: YouTubeApi.liveChatId(videoId, tok).also { liveChatId = it }
+            YouTubeApi.send(chatId, text, tok)
+            chatJs("window.__biruEchoState && __biruEchoState($id, 'sent')")
+        } catch (e: YouTubeApi.ApiError) {
+            if (e.code == 401 && !retried) {
+                GoogleAuth.clearCache()
+                token = null
+                runOnUiThread { withToken { t -> sender.execute { deliver(text, id, t, retried = true) } } }
+                return
+            }
+            failed(text, id, e.message ?: "Erro ao enviar")
+        } catch (e: Exception) {
+            failed(text, id, "Sem conexão. Tenta de novo.")
+        }
+    }
+
+    private fun failed(text: String, id: Int, message: String) {
+        chatJs("window.__biruEchoState && __biruEchoState($id, 'fail')")
+        runOnUiThread {
+            toast(message)
+            // devolve o texto para a pessoa tentar de novo
+            if (input.text.isEmpty()) {
+                input.setText(text)
+                input.setSelection(text.length)
             }
         }
     }
 
-    private fun send(text: String, retried: Boolean) {
-        withToken { tok ->
-            sendBtn.isEnabled = false
-            bg.execute {
-                try {
-                    val chatId = liveChatId ?: YouTubeApi.liveChatId(videoId, tok).also { liveChatId = it }
-                    YouTubeApi.send(chatId, text, tok)
-                    runOnUiThread {
-                        sendBtn.isEnabled = true
-                        if (input.text.toString().trim() == text) input.text.clear()
-                    }
-                } catch (e: YouTubeApi.ApiError) {
-                    runOnUiThread {
-                        sendBtn.isEnabled = true
-                        if (e.code == 401 && !retried) {
-                            token = null
-                            send(text, retried = true)
-                        } else {
-                            toast(e.message ?: "Erro ao enviar")
-                        }
-                    }
-                } catch (e: Exception) {
-                    runOnUiThread {
-                        sendBtn.isEnabled = true
-                        toast("Sem conexão: ${e.message}")
-                    }
-                }
+    private fun withToken(cb: (String) -> Unit) {
+        token?.let { cb(it); return }
+        auth.token(interactive = true) { t, err ->
+            if (t != null) {
+                token = t
+                cb(t)
+            } else if (err != null) {
+                toast(err)
             }
         }
     }
 
     // ---------------- util ----------------
 
-    private fun assetText(name: String): String = assets.open(name).bufferedReader().use { it.readText() }
+    private val assetCache = HashMap<String, String>()
+    private fun assetText(name: String): String =
+        assetCache.getOrPut(name) { assets.open(name).bufferedReader().use { it.readText() } }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
 
     override fun onDestroy() {
         if (::chat.isInitialized) chat.destroy()
         if (::player.isInitialized) player.destroy()
-        bg.shutdown()
+        io.shutdown()
+        sender.shutdown()
         super.onDestroy()
     }
 }
